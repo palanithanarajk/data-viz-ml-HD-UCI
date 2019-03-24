@@ -1,0 +1,191 @@
+---
+title: "Exploratory Data Analysis, Data Viz by Palanitk"
+output: html_notebook
+---
+
+In this *R* notebook we are going to explore the data analytics and data visualization power of *R*. 
+
+In this example we are going to analyze the heart disease database from [UCI machine library](https://archive.ics.uci.edu/ml/datasets/Heart+Disease).
+
+The dataset contains 76 predictors(features) and 303 observations. Patients with heart disease is binary coded as **Presence** given as `1` and **No Presence** as `0`. The prerequiste to run in R Markdown is download the CSV data file in your working directory. This can be done by setting the current working directory as folows in R chunk:  `setwd("C:\\Users\\RajuPC\\Documents\\MyR")`
+
+First load the supporting *R* libraries
+
+```{r message=FALSE}
+setwd("C:\\Users\\RajuPC\\Documents\\MyR") # Setting Woring Directory
+library(tidyverse) #A high efficient data viz and manipulation R Library
+library(caret) # A collection of Machine Learning Libraries
+library(plotly) #A interaction Graphing System
+library(ggsci) # A great collection of themes for ggplot
+```
+
+Loading of UCI heart disease data. 
+```{r}
+#Load the CSV data file
+hci<-read_csv("heart.csv")
+
+hci$sex <- as.character(hci$sex)
+hci$sex[hci$sex== 1] <- "Male"
+hci$sex[hci$sex== 0] <- "Female"
+
+summary(hci)
+tbl_df(hci)# A nicer view of the data as a table 
+```
+Convert following predictors as factor for plotting
+
+```{r}
+#Convert following predictors as factor for plotting
+hci$sex<-as.factor(hci$sex)
+hci$cp<-as.factor(hci$cp)
+hci$thal<-as.factor(hci$thal)
+hci$ca<-as.factor(hci$ca)
+```
+
+Distribution of Male and Female population across Age parameter
+```{r fig.width=8, fig.height=4}
+ggplotly(p1<-hci %>% ggplot(aes(x=age,fill=sex))+geom_bar()+xlab("Age") + 
+           ylab("Number")+ guides(fill = guide_legend(title = "Gender"))
+)%>%   layout(legend = list(orientation = "h", x = 0, y = 1))
+
+```
+
+Representation of Cholestoral level 
+
+```{r fig.width=8, fig.height=4}
+p2<-hci %>% ggplot(aes(x=age,y=chol,fill=sex, size=chol))+geom_point(alpha=0.7)+xlab("Age") + 
+           ylab("Cholestoral")+ scale_fill_npg()+guides(fill = guide_legend(title = "Gender"))+
+ theme(plot.margin = margin(0.1,.1,.1,.1, "cm"))
+ggplotly(p2)%>%  layout(legend = list(orientation = "h", x = 0, y = 1))
+
+```
+
+
+Representation of Cholestoral level across different defect conditions
+
+```{r fig.width=8, fig.height=4}
+p3<-hci %>% ggplot(aes(x=age,y=chol,fill=sex, size=chol))+geom_point(alpha=0.7)+xlab("Age") + 
+           ylab("Cholestoral")+facet_grid(.~fbs)+
+ theme(plot.margin = margin(0.1,.1,.1,.1, "cm"))
+#ggsave("p3.png",plot=p3,dpi=300) To save the plot
+ggplotly(p3)%>%layout(legend = list(orientation = "h", x = 0, y = 1))
+```
+
+Comparison of Blood pressure across pain type (0~3)
+```{r}
+p4<-hci%>%ggplot(aes(x=sex,y=trestbps))+geom_boxplot(fill="darkorange")+xlab("Sex")+ylab("BP")+facet_grid(~cp)
+ggplotly(p4)
+```
+
+Comparison of Cholestoral across pain type (0~3)
+
+```{r}
+p5<-hci%>%ggplot(aes(x=sex,y=chol))+geom_boxplot(fill="#D55E00")+xlab("Sex")+ylab("Chol")+facet_grid(~cp)
+ggplotly(p5)
+```
+
+Relation between Gender, Age, Cholestoral, BP 
+
+```{r}
+# Scatterplot
+gg <- ggplot(hci, aes(x=age, y=chol, col=sex)) +
+  geom_point(aes( size=trestbps),shape=1,alpha=0.6) +  theme_bw()+
+  geom_smooth(method="loess", se=F) +theme(plot.margin = margin(0.1,.1,.1,.1, "cm"))
+ ggplotly(gg)%>%layout(legend = list(orientation = "h", x = 0, y = 1))
+ 
+```
+
+#Detection of heart disease using Machine learning methods
+
+First the data is partitioned into training and test datasets
+
+```{r}
+# Create the training and test datasets
+set.seed(100)
+hci<-read_csv("heart.csv")
+
+# Step 1: Get row numbers for the training data
+trainRowNumbers <- createDataPartition(hci$target, p=0.8, list=FALSE)
+
+# Step 2: Create the training  dataset
+trainData <- hci[trainRowNumbers,]
+
+# Step 3: Create the test dataset
+testData <- hci[-trainRowNumbers,]
+
+# Store X and Y for later use.
+x = trainData[, 1:13]
+trainData$target[trainData$target==1]<-"P"
+trainData$target[trainData$target==0]<-"N"
+y=trainData$target
+testData$target[testData$target==1]<-"P"
+testData$target[testData$target==0]<-"N"
+
+yt=testData$target
+# # See the structure of the new dataset
+
+```
+
+
+Normalization of features
+```{r}
+
+preProcess_range_model <- preProcess(trainData, method='range')
+preProcess_range_model1 <- preProcess(testData, method='range')
+
+trainData <- predict(preProcess_range_model, newdata = trainData)
+testData <- predict(preProcess_range_model1, newdata = testData)
+
+# Append the Y variable
+trainData$target <- as.factor(y)
+testData$target<-as.factor(yt)
+#apply(trainData[, 1:13], 2, FUN=function(x){c('min'=min(x), 'max'=max(x))})
+str(trainData)
+str(testData)
+```
+Detection of Heart disease by `Earth` ML method present in `caret` package
+
+```{r}
+#fit control
+fitControl <- trainControl(
+  method = 'cv',                   # k-fold cross validation
+  number = 5,                      # number of folds
+  savePredictions = 'final',       # saves predictions for optimal tuning parameter
+  classProbs = T,                  # should class probabilities be returned
+  summaryFunction=twoClassSummary  # results summary function
+) 
+
+# Step 1: Tune hyper parameters by setting tuneLength
+set.seed(100)
+model_mars2 = train(target ~ ., data=trainData, method='earth', tuneLength = 5, metric='ROC', trControl = fitControl)
+model_mars2
+
+# Step 2: Predict on testData and Compute the confusion matrix
+predicted2 <- predict(model_mars2, testData)
+confusionMatrix(reference = testData$target, data = predicted2, mode='everything')
+
+```
+Comparison of some common ML methods using Models_Compare method
+
+```{r}
+# Train the model using adaboost
+model_adaboost = train(target ~ ., data=trainData, method='adaboost', tuneLength=2, trControl = fitControl)
+
+model1 = train(target ~ ., data=trainData, method='knn', tuneLength=2, trControl = fitControl)#KNN Model
+model2 = train(target ~ ., data=trainData, method='svmRadial', tuneLength=2, trControl = fitControl)#SVM
+model2 = train(target ~ ., data=trainData, method='rpart', tuneLength=2, trControl = fitControl)#RandomForest
+
+# Compare model performances using resample()
+models_compare <- resamples(list(EARTH=model_mars2,ADABOOST=model_adaboost, KNN=model1,SVM=model2, RanF=model2))
+
+# Summary of the models performances
+summary(models_compare)
+
+# Draw box plots to compare models
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(models_compare, scales=scales)
+```
+
+
+
+
+
